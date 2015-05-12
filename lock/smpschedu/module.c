@@ -4,17 +4,109 @@
 #include <linux/module.h>	/* Needed by all modules */
 #include <linux/kernel.h>	/* Needed for KERN_INFO */
 #include <linux/init.h>		/* Needed for the macros */
+
+#include <linux/kthread.h>
+#include <linux/delay.h>
+#include <linux/notifier.h>
+
 #define DRIVER_AUTHOR "Peter Jay Salzman <p@dirac.org>"
 #define DRIVER_DESC   "A sample driver"
 
+/*
+ * The mthread thread - touches the timestamp.
+ */
+static int mthread1(void *unused)
+{
+    static int count = 0;
+
+    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+
+    sched_setscheduler(current, SCHED_NORMAL, &param);
+
+    set_current_state(TASK_INTERRUPTIBLE);
+
+    while (!kthread_should_stop()) {
+
+        count ++;
+
+        if (!(count % 100))
+          printk(KERN_INFO "-- p1 %d\n", count);
+
+        msleep(10);
+
+        if (kthread_should_stop())
+            break;
+
+        set_current_state(TASK_INTERRUPTIBLE);
+    }
+    __set_current_state(TASK_RUNNING);
+
+    printk(KERN_INFO "-- p1 %d\n", count);
+
+    return 0;
+}
+
+static int mthread2(void *unused)
+{
+    static int count = 0;
+
+    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+
+    sched_setscheduler(current, SCHED_FIFO, &param);
+
+    set_current_state(TASK_INTERRUPTIBLE);
+
+    while (!kthread_should_stop()) {
+
+        count ++;
+
+        if (!(count % 100))
+            printk(KERN_INFO "-- p2 %d\n", count);
+
+        msleep(10);
+
+        if (kthread_should_stop())
+            break;
+
+        set_current_state(TASK_INTERRUPTIBLE);
+    }
+    __set_current_state(TASK_RUNNING);
+
+    printk(KERN_INFO "-- p2 %d\n", count);
+
+    return 0;
+}
+
+static struct task_struct *p1;
+static struct task_struct *p2;
+
 static int __init init_xmodule(void)
 {
-	printk(KERN_INFO "Hello, world\n");
+    p1 = kthread_create(mthread1, NULL, "mthread1");
+    if (IS_ERR(p1)) {
+        printk(KERN_INFO "Cannot create kthread1\n");
+        return 0;
+    }
+
+    p2 = kthread_create(mthread2, NULL, "mthread2");
+    if (IS_ERR(p2)) {
+        printk(KERN_INFO "Cannot create kthread2\n");
+        return 0;
+    }
+
+    wake_up_process(p1);
+    wake_up_process(p2);
+
+    printk(KERN_INFO "Hello, world\n");
+
 	return 0;
 }
 
 static void __exit cleanup_xmodule(void)
 {
+    kthread_stop(p1); // Synchronous operation
+    kthread_stop(p2);
+
 	printk(KERN_INFO "Goodbye, world\n");
 }
 

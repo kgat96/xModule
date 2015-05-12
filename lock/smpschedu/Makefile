@@ -1,5 +1,5 @@
 obj-m := module.o
-KDIR := /mnt/data/omap/linux-omap
+KDIR ?= /mnt/data/omap/linux-omap
 
 PWD := $(shell pwd)
 default:
