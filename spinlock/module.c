@@ -19,7 +19,9 @@ static int glob_conut = 0;
  */
 static int mthread1(void *unused)
 {
-    static int count = 30000000;
+    static int count = 60000000;
+
+    static int cpu[4] = {0,0,0,0};
 
     static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 
@@ -32,7 +34,9 @@ static int mthread1(void *unused)
         count --;
         glob_conut ++;
 
-      if (count == 0)
+        cpu[smp_processor_id()] ++;
+
+        if (count == 0)
             break;
 
 //        msleep(10);
@@ -45,13 +49,16 @@ static int mthread1(void *unused)
     __set_current_state(TASK_RUNNING);
 
     printk(KERN_INFO "-- p1 %d %d\n", count, glob_conut);
+    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
 
     return 0;
 }
 
 static int mthread2(void *unused)
 {
-    static int count = 30000000;
+    static int count = 60000000;
+
+    static int cpu[4] = {0,0,0,0};
 
     static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 
@@ -63,6 +70,7 @@ static int mthread2(void *unused)
 
         count --;
         glob_conut ++;
+        cpu[smp_processor_id()] ++;
 
         if (count == 0)
             break;
@@ -77,12 +85,51 @@ static int mthread2(void *unused)
     __set_current_state(TASK_RUNNING);
 
     printk(KERN_INFO "-- p2 %d %d\n", count, glob_conut);
+    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
 
     return 0;
 }
 
+static int mthread3(void *unused)
+{
+    static int count = 60000000;
+
+    static int cpu[4] = {0,0,0,0};
+
+    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+
+    sched_setscheduler(current, SCHED_FIFO, &param);
+
+    set_current_state(TASK_INTERRUPTIBLE);
+
+    while (!kthread_should_stop()) {
+
+        count --;
+        glob_conut ++;
+        cpu[smp_processor_id()] ++;
+
+        if (count == 0)
+            break;
+
+ //       msleep(10);
+
+        if (kthread_should_stop())
+            break;
+
+        set_current_state(TASK_INTERRUPTIBLE);
+    }
+    __set_current_state(TASK_RUNNING);
+
+    printk(KERN_INFO "-- p3 %d %d\n", count, glob_conut);
+    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
+
+    return 0;
+}
+
+
 static struct task_struct *p1;
 static struct task_struct *p2;
+static struct task_struct *p3;
 
 static int __init init_xmodule(void)
 {
@@ -98,8 +145,16 @@ static int __init init_xmodule(void)
         return 0;
     }
 
+
+    p3 = kthread_create(mthread3, NULL, "mthread3");
+    if (IS_ERR(p3)) {
+        printk(KERN_INFO "Cannot create kthread3\n");
+        return 0;
+    }
+
     wake_up_process(p1);
     wake_up_process(p2);
+    wake_up_process(p3);
 
     printk(KERN_INFO "Hello, world\n");
 
@@ -112,6 +167,8 @@ static void __exit cleanup_xmodule(void)
         kthread_stop(p1); // Synchronous operation
     if (p2->state <= 0)
         kthread_stop(p2);
+    if (p3->state <= 0)
+        kthread_stop(p3);
 
 	printk(KERN_INFO "Goodbye, world\n");
 }
