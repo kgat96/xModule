@@ -9,6 +9,7 @@
 #include <linux/delay.h>
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
+#include <linux/mutex.h>
 
 #define DRIVER_AUTHOR "Peter Jay Salzman <p@dirac.org>"
 #define DRIVER_DESC   "A sample driver"
@@ -16,6 +17,20 @@
 static int glob_conut = 0;
 
 spinlock_t lock;
+DEFINE_MUTEX(mux);
+
+void plus(void)
+{
+    int tmp;
+    // spin_lock(&lock);
+    mutex_lock(&mux);
+    tmp = glob_conut;
+    tmp ++;
+    glob_conut = tmp;
+    mutex_unlock(&mux);
+    // spin_unlock(&lock);
+}
+
 
 /*
  * The mthread thread - touches the timestamp.
@@ -26,25 +41,14 @@ static int mthread1(void *unused)
 
     static int cpu[4] = {0,0,0,0};
 
-    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-
-    sched_setscheduler(current, SCHED_NORMAL, &param);
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        int tmp;
-//busybox-mipsel insmod /data/module.ko
-        count --;
-
-        tmp = glob_conut;
-        tmp ++;
-        glob_conut = tmp;
+        if (count-- == 0)
+            break;
+        plus();
 
         cpu[smp_processor_id()] ++;
-
-        if (count == 0)
-            break;
     }
 
     __set_current_state(TASK_RUNNING);
@@ -61,25 +65,13 @@ static int mthread2(void *unused)
 
     static int cpu[4] = {0,0,0,0};
 
-    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-
-    sched_setscheduler(current, SCHED_FIFO, &param);
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        int tmp;
-//busybox-mipsel insmod /data/module.ko
-        count --;
-
-        tmp = glob_conut;
-        tmp ++;
-        glob_conut = tmp;
-
-        cpu[smp_processor_id()] ++;
-
-        if (count == 0)
+        if (count-- == 0)
             break;
+        plus();
+        cpu[smp_processor_id()] ++;
     }
 
     __set_current_state(TASK_RUNNING);
@@ -92,35 +84,17 @@ static int mthread2(void *unused)
 
 static int mthread3(void *unused)
 {
-
     static int count = 60000000;
 
     static int cpu[4] = {0,0,0,0};
 
-    static struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-
-    sched_setscheduler(current, SCHED_FIFO, &param);
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-
-        int tmp;
-
-//busybox-mipsel insmod /data/module.ko
-        count --;
-
-        spin_lock(&lock);
-        spin_lock(&lock);
-        tmp = glob_conut;
-        tmp ++;
-        glob_conut = tmp;
-        spin_unlock(&lock);
-
-        cpu[smp_processor_id()] ++;
-
-        if (count == 0)
+        if (count-- == 0)
             break;
+        plus();
+        cpu[smp_processor_id()] ++;
     }
 
     __set_current_state(TASK_RUNNING);
@@ -139,6 +113,7 @@ static int __init init_xmodule(void)
 {
 
     spin_lock_init(&lock);
+    mutex_init(&mux);
 
     p1 = kthread_create(mthread1, NULL, "mthread1");
     if (IS_ERR(p1)) {
@@ -159,8 +134,8 @@ static int __init init_xmodule(void)
     }
 
     wake_up_process(p1);
-    wake_up_process(p2);
-    wake_up_process(p3);
+    // wake_up_process(p2);
+    // wake_up_process(p3);
 
     printk(KERN_INFO "Hello, world\n");
 
