@@ -8,11 +8,14 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/notifier.h>
+#include <linux/spinlock.h>
 
 #define DRIVER_AUTHOR "Peter Jay Salzman <p@dirac.org>"
 #define DRIVER_DESC   "A sample driver"
 
 static int glob_conut = 0;
+
+spinlock_t lock;
 
 /*
  * The mthread thread - touches the timestamp.
@@ -30,22 +33,20 @@ static int mthread1(void *unused)
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-
+        int tmp;
+//busybox-mipsel insmod /data/module.ko
         count --;
-        glob_conut ++;
+
+        tmp = glob_conut;
+        tmp ++;
+        glob_conut = tmp;
 
         cpu[smp_processor_id()] ++;
 
         if (count == 0)
             break;
-
-//        msleep(10);
-
-        if (kthread_should_stop())
-            break;
-
-        set_current_state(TASK_INTERRUPTIBLE);
     }
+
     __set_current_state(TASK_RUNNING);
 
     printk(KERN_INFO "-- p1 %d %d\n", count, glob_conut);
@@ -67,31 +68,31 @@ static int mthread2(void *unused)
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-
+        int tmp;
+//busybox-mipsel insmod /data/module.ko
         count --;
-        glob_conut ++;
+
+        tmp = glob_conut;
+        tmp ++;
+        glob_conut = tmp;
+
         cpu[smp_processor_id()] ++;
 
         if (count == 0)
             break;
-
- //       msleep(10);
-
-        if (kthread_should_stop())
-            break;
-
-        set_current_state(TASK_INTERRUPTIBLE);
     }
+
     __set_current_state(TASK_RUNNING);
 
     printk(KERN_INFO "-- p2 %d %d\n", count, glob_conut);
     printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
 
-    return 0;
+    return 0;               
 }
 
 static int mthread3(void *unused)
 {
+
     static int count = 60000000;
 
     static int cpu[4] = {0,0,0,0};
@@ -104,20 +105,24 @@ static int mthread3(void *unused)
 
     while (!kthread_should_stop()) {
 
+        int tmp;
+
+//busybox-mipsel insmod /data/module.ko
         count --;
-        glob_conut ++;
+
+        spin_lock(&lock);
+        spin_lock(&lock);
+        tmp = glob_conut;
+        tmp ++;
+        glob_conut = tmp;
+        spin_unlock(&lock);
+
         cpu[smp_processor_id()] ++;
 
         if (count == 0)
             break;
-
- //       msleep(10);
-
-        if (kthread_should_stop())
-            break;
-
-        set_current_state(TASK_INTERRUPTIBLE);
     }
+
     __set_current_state(TASK_RUNNING);
 
     printk(KERN_INFO "-- p3 %d %d\n", count, glob_conut);
@@ -126,13 +131,15 @@ static int mthread3(void *unused)
     return 0;
 }
 
-
 static struct task_struct *p1;
 static struct task_struct *p2;
 static struct task_struct *p3;
 
 static int __init init_xmodule(void)
 {
+
+    spin_lock_init(&lock);
+
     p1 = kthread_create(mthread1, NULL, "mthread1");
     if (IS_ERR(p1)) {
         printk(KERN_INFO "Cannot create kthread1\n");
@@ -144,7 +151,6 @@ static int __init init_xmodule(void)
         printk(KERN_INFO "Cannot create kthread2\n");
         return 0;
     }
-
 
     p3 = kthread_create(mthread3, NULL, "mthread3");
     if (IS_ERR(p3)) {
