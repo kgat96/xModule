@@ -14,93 +14,51 @@
 #define DRIVER_AUTHOR "Peter Jay Salzman <p@dirac.org>"
 #define DRIVER_DESC   "A sample driver"
 
-static int glob_conut = 0;
-
-spinlock_t lock;
-DEFINE_MUTEX(mux);
-
-void plus(void)
-{
-    int tmp;
-    // spin_lock(&lock);
-    mutex_lock(&mux);
-    tmp = glob_conut;
-    tmp ++;
-    glob_conut = tmp;
-    mutex_unlock(&mux);
-    // spin_unlock(&lock);
-}
-
+struct completion completion;
 
 /*
  * The mthread thread - touches the timestamp.
  */
 static int mthread1(void *unused)
 {
-    static int count = 60000000;
-
-    static int cpu[4] = {0,0,0,0};
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        if (count-- == 0)
-            break;
-        plus();
-
-        // cpu[smp_processor_id()] ++;
+        printk(KERN_INFO "-- %s completion\n", __func__);
+        wait_for_completion(&completion);
     }
 
     __set_current_state(TASK_RUNNING);
-
-    printk(KERN_INFO "-- p1 %d %d\n", count, glob_conut);
-    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
+    printk(KERN_INFO "-- %s exit\n", __func__);
 
     return 0;
 }
 
 static int mthread2(void *unused)
 {
-    static int count = 60000000;
-
-    static int cpu[4] = {0,0,0,0};
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        if (count-- == 0)
-            break;
-        plus();
-        // cpu[smp_processor_id()] ++;
+        printk(KERN_INFO "-- %s completion\n", __func__);
+        wait_for_completion(&completion);
     }
 
     __set_current_state(TASK_RUNNING);
+    printk(KERN_INFO "-- %s exit\n", __func__);
 
-    printk(KERN_INFO "-- p2 %d %d\n", count, glob_conut);
-    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
-
-    return 0;               
+    return 0;
 }
 
 static int mthread3(void *unused)
 {
-    static int count = 60000000;
-
-    static int cpu[4] = {0,0,0,0};
-
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        if (count-- == 0)
-            break;
-        plus();
-        // cpu[smp_processor_id()] ++;
+
     }
 
     __set_current_state(TASK_RUNNING);
-
-    printk(KERN_INFO "-- p3 %d %d\n", count, glob_conut);
-    printk(KERN_INFO "-- cpu %d %d %d %d\n", cpu[0], cpu[1],cpu[2],cpu[3]);
+    printk(KERN_INFO "-- %s exit\n", __func__);
 
     return 0;
 }
@@ -112,8 +70,7 @@ static struct task_struct *p3;
 static int __init init_xmodule(void)
 {
 
-    spin_lock_init(&lock);
-    mutex_init(&mux);
+    init_completion(&completion);
 
     p1 = kthread_create(mthread1, NULL, "mthread1");
     if (IS_ERR(p1)) {
@@ -133,11 +90,17 @@ static int __init init_xmodule(void)
         return 0;
     }
 
+    complete(&completion);
+
+    msleep(2000);
+
     wake_up_process(p1);
     wake_up_process(p2);
     // wake_up_process(p3);
 
     printk(KERN_INFO "Hello, world\n");
+
+
 
 	return 0;
 }
@@ -166,4 +129,3 @@ MODULE_LICENSE("GPL");
  */
 MODULE_AUTHOR(DRIVER_AUTHOR);	/* Who wrote this module? */
 MODULE_DESCRIPTION(DRIVER_DESC);	/* What does this module do */
-
