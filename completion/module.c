@@ -25,7 +25,7 @@ static int mthread1(void *unused)
 
     while (!kthread_should_stop()) {
         printk(KERN_INFO "-- %s completion\n", __func__);
-        wait_for_completion(&completion);
+        wait_for_completion_interruptible(&completion);
     }
 
     __set_current_state(TASK_RUNNING);
@@ -40,7 +40,7 @@ static int mthread2(void *unused)
 
     while (!kthread_should_stop()) {
         printk(KERN_INFO "-- %s completion\n", __func__);
-        wait_for_completion(&completion);
+        wait_for_completion_interruptible(&completion);
     }
 
     __set_current_state(TASK_RUNNING);
@@ -63,9 +63,9 @@ static int mthread3(void *unused)
     return 0;
 }
 
-static struct task_struct *p1;
-static struct task_struct *p2;
-static struct task_struct *p3;
+static struct task_struct *p1 = 0;
+static struct task_struct *p2 = 0;
+static struct task_struct *p3 = 0;
 
 static int __init init_xmodule(void)
 {
@@ -84,11 +84,11 @@ static int __init init_xmodule(void)
         return 0;
     }
 
-    p3 = kthread_create(mthread3, NULL, "mthread3");
-    if (IS_ERR(p3)) {
-        printk(KERN_INFO "Cannot create kthread3\n");
-        return 0;
-    }
+    // p3 = kthread_create(mthread3, NULL, "mthread3");
+    // if (IS_ERR(p3)) {
+    //     printk(KERN_INFO "Cannot create kthread3\n");
+    //     return 0;
+    // }
 
     complete(&completion);
 
@@ -100,18 +100,18 @@ static int __init init_xmodule(void)
 
     printk(KERN_INFO "Hello, world\n");
 
-
+    wait_for_completion_interruptible(&completion);
 
 	return 0;
 }
 
 static void __exit cleanup_xmodule(void)
 {
-    if (p1->state <= 0)
+    if (p1 && p1->state <= 0)
         kthread_stop(p1); // Synchronous operation
-    if (p2->state <= 0)
+    if (p2 && p2->state <= 0)
         kthread_stop(p2);
-    if (p3->state <= 0)
+    if (p3 && p3->state <= 0)
         kthread_stop(p3);
 
 	printk(KERN_INFO "Goodbye, world\n");
