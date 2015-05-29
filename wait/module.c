@@ -46,9 +46,11 @@ static int mthread2(void *unused)
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
+
         printk(KERN_INFO "-- %s %d\n", __func__, current->pid);
+
         wait_event_interruptible(event_queue, f2);
-        f2 = 0;
+        f2 = 1;
     }
 
     __set_current_state(TASK_RUNNING);
@@ -62,6 +64,8 @@ static int mthread3(void *unused)
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
+
+            // msleep(8000);
         printk(KERN_INFO "-- %s %d\n", __func__, current->pid);
         wait_event_interruptible(event_queue, f3);
         f3 = 0;
@@ -101,13 +105,15 @@ static int __init init_xmodule(void)
     wake_up_process(p2);
     wake_up_process(p3);
 
+        msleep(2000);
+
     printk(KERN_INFO "Hello, world\n");
 
-    msleep(3000);
 
-    f1 = 1; f2 = 1; f3 = 1;
+    f1 = 1; f2 = 1; f3 = 1; 
     //TODO: test xxxxxx
-    wake_up_interruptible_all(&event_queue);
+    wake_up_interruptible_nr(&event_queue, 1);
+
 
     return 0;
 }
