@@ -38,7 +38,7 @@ static int mthread(void *unused)
     set_current_state(TASK_INTERRUPTIBLE);
 
     while (!kthread_should_stop()) {
-        printk(KERN_INFO "-- %s %d\n", __func__, current->pid);
+        printk(KERN_INFO "-- %s %d %d\n", __func__, smp_processor_id(), current->pid);
 
         p->n1 ++;
 
